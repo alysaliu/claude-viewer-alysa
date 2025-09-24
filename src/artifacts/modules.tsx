@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Home, BarChart2, Layers, PenTool, ChevronDown, MoreVertical, Bell, Briefcase, Activity, DollarSignIcon } from 'lucide-react';
+import OverviewPage from './OverviewPage';
 
 interface MedicalRecord {
   id: number;
@@ -1883,6 +1884,487 @@ const MedicalRecordsTable = () => {
     );
   };
 
+  const PatientDetailView = ({ patientData, onBack, onSave }: {
+    patientData: any;
+    onBack: () => void;
+    onSave: (data: any) => void;
+  }) => {
+    const [editedData, setEditedData] = React.useState(patientData);
+    const [showSource, setShowSource] = React.useState(false);
+    const [currentField, setCurrentField] = React.useState('');
+    const [currentFieldIsEmpty, setCurrentFieldIsEmpty] = React.useState(false);
+    const [editingField, setEditingField] = React.useState<string | null>(null);
+    const [isVerified, setIsVerified] = React.useState(false);
+    const [unsavedFields, setUnsavedFields] = React.useState<Set<string>>(new Set());
+    const [editCount, setEditCount] = React.useState(0);
+
+    const handleSaveAndVerifyAll = () => {
+      setIsVerified(true);
+      setUnsavedFields(new Set()); // Clear unsaved fields when saving
+      onSave(editedData);
+    };
+
+    const handleFieldChange = (fieldPath: string, value: string) => {
+      // Check if this is actually a change by getting the previous value
+      const keys = fieldPath.split('.');
+      let previousValue = editedData;
+      for (const key of keys) {
+        if (previousValue && typeof previousValue === 'object' && key in previousValue) {
+          previousValue = previousValue[key];
+        } else {
+          previousValue = '';
+          break;
+        }
+      }
+
+      const newData = { ...editedData };
+      let current = newData;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) {
+          current[keys[i]] = {};
+        }
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+      setEditedData(newData);
+
+      // Increment edit count if this is actually a change
+      if (previousValue !== value) {
+        setEditCount(prev => prev + 1);
+      }
+
+      // Mark field as unsaved if it has a value
+      if (value && value.trim() !== '') {
+        setUnsavedFields(prev => new Set([...prev, fieldPath]));
+      } else {
+        // Remove from unsaved if value is empty
+        setUnsavedFields(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(fieldPath);
+          return newSet;
+        });
+      }
+    };
+
+    const renderEditableField = (field: string, value: string, sourceDoc: string, fieldPath: string, isEmpty: boolean = false, conflicts: string[] = [], updatedBy: 'ai' | 'human' = 'ai') => {
+      const isEditing = editingField === field;
+
+      // Get the current value from editedData for empty fields
+      const getCurrentValue = () => {
+        const keys = fieldPath.split('.');
+        let current = editedData;
+        for (const key of keys) {
+          if (current && typeof current === 'object' && key in current) {
+            current = current[key];
+          } else {
+            return isEmpty ? '' : value;
+          }
+        }
+        return current || (isEmpty ? '' : value);
+      };
+
+      const currentValue = getCurrentValue();
+
+      const handleFieldClick = () => {
+        setEditingField(field);
+        setCurrentField(field);
+        setCurrentFieldIsEmpty(isEmpty);
+        setShowSource(true);
+      };
+
+      const handleInputFocus = () => {
+        setCurrentField(field);
+        setCurrentFieldIsEmpty(isEmpty);
+        setShowSource(true);
+      };
+
+      return (
+        <div className="relative group">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={currentValue}
+                  onChange={(e) => handleFieldChange(fieldPath, e.target.value)}
+                  onFocus={handleInputFocus}
+                  onBlur={() => setEditingField(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setEditingField(null);
+                    if (e.key === 'Escape') setEditingField(null);
+                  }}
+                  className="w-full p-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  autoFocus
+                />
+              ) : (
+                <div
+                  className={`p-1.5 border rounded min-h-[32px] bg-white cursor-pointer hover:bg-gray-50 transition-colors ${
+                    !currentValue || currentValue === ''
+                      ? 'border-dashed border-gray-300 bg-gray-50'
+                      : conflicts.length > 0
+                        ? 'border-orange-300 bg-orange-50'
+                        : 'border-gray-200'
+                  }`}
+                  onClick={handleFieldClick}
+                >
+                  {!currentValue || currentValue === '' ? (
+                    <span className="text-gray-400 text-xs italic">Enter data</span>
+                  ) : conflicts.length > 0 ? (
+                    <div className="space-y-2">
+                      {/* Current value option */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          {isEditing && editingField === `${field}_current` ? (
+                            <input
+                              type="text"
+                              value={currentValue}
+                              onChange={(e) => handleFieldChange(fieldPath, e.target.value)}
+                              onFocus={handleInputFocus}
+                              onBlur={() => setEditingField(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') setEditingField(null);
+                                if (e.key === 'Escape') setEditingField(null);
+                              }}
+                              className="w-full p-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              autoFocus
+                            />
+                          ) : (
+                            <div
+                              className="p-1.5 border border-blue-300 rounded bg-white cursor-pointer hover:bg-blue-50 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingField(`${field}_current`);
+                                setCurrentField(field);
+                                setCurrentFieldIsEmpty(false);
+                                setShowSource(true);
+                              }}
+                            >
+                              <span className="text-gray-900 text-xs">{currentValue}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {/* Sparkle Icon for AI */}
+                          <div className="relative group/tooltip">
+                            <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                            </svg>
+                            <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                              Updated by Supio AI on 9/25/25
+                            </div>
+                          </div>
+                          {/* Accept Button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFieldChange(fieldPath, currentValue);
+                            }}
+                            className="w-4 h-4 flex items-center justify-center text-green-600 hover:text-green-800 hover:bg-green-100 rounded"
+                            title="Accept this value"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      {/* Conflict value options */}
+                      {conflicts.map((conflictValue, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className="flex-1">
+                            {isEditing && editingField === `${field}_conflict_${index}` ? (
+                              <input
+                                type="text"
+                                value={conflictValue}
+                                onChange={(e) => {
+                                  // For simplicity, we'll just update the field directly
+                                  // In a real app, you might want to manage conflict values separately
+                                  handleFieldChange(fieldPath, e.target.value);
+                                }}
+                                onFocus={handleInputFocus}
+                                onBlur={() => setEditingField(null)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') setEditingField(null);
+                                  if (e.key === 'Escape') setEditingField(null);
+                                }}
+                                className="w-full p-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                autoFocus
+                              />
+                            ) : (
+                              <div
+                                className="p-1.5 border border-gray-300 rounded bg-white cursor-pointer hover:bg-blue-50 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingField(`${field}_conflict_${index}`);
+                                  setCurrentField(field);
+                                  setCurrentFieldIsEmpty(false);
+                                  setShowSource(true);
+                                }}
+                              >
+                                <span className="text-gray-900 text-xs">{conflictValue}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {/* Sparkle Icon for AI */}
+                            <div className="relative group/tooltip">
+                              <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                              </svg>
+                              <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                                Updated by Supio AI on 8/15/23
+                              </div>
+                            </div>
+                            {/* Accept Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFieldChange(fieldPath, conflictValue);
+                              }}
+                              className="w-4 h-4 flex items-center justify-center text-green-600 hover:text-green-800 hover:bg-green-100 rounded"
+                              title="Accept this value"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-gray-900 text-xs">{currentValue}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {currentValue && currentValue !== '' && !unsavedFields.has(fieldPath) && conflicts.length === 0 && (
+              <div className="flex items-center gap-1">
+                {updatedBy === 'ai' ? (
+                  /* Sparkle Icon for AI */
+                  <div className="relative group/tooltip">
+                    <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Updated by Supio AI on 9/25/25
+                    </div>
+                  </div>
+                ) : (
+                  /* Person Icon for Human */
+                  <div className="relative group/tooltip">
+                    <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Updated by Alysa Liu on 9/20/25
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="h-screen flex flex-col bg-white">
+        {/* Header */}
+        <div className="border-b border-gray-200 bg-white px-6 py-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900">Patient Information</h1>
+              <div className="flex items-center mt-1">
+                <span className="text-xs text-gray-500">{editCount} edit{editCount !== 1 ? 's' : ''} made by Alysa Liu</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Panel */}
+          <div className="w-1/2 overflow-auto p-6 space-y-6">
+            {/* Basic Patient Information */}
+            <div className="space-y-4">
+              <h2 className="text-base font-medium text-gray-900">Basic Information</h2>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* Name</label>
+                {renderEditableField('name', editedData.name, 'Patient Registration Form', 'name', false, [], 'human')}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* Gender</label>
+                {renderEditableField('gender', editedData.gender, 'Patient Registration Form', 'gender')}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
+                  * Date of Birth
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                    Conflict
+                  </span>
+                </label>
+                {renderEditableField('dateOfBirth', editedData.dateOfBirth, 'Patient Registration Form', 'dateOfBirth', false, ['10/05/66'])}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* State of Residence</label>
+                {renderEditableField('stateOfResidence', editedData.stateOfResidence, 'Patient Registration Form', 'stateOfResidence')}
+              </div>
+            </div>
+
+            {/* Medical History */}
+            <div className="space-y-4">
+              <h2 className="text-base font-medium text-gray-900">Medical History</h2>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* Description</label>
+                {renderEditableField('medicalDescription', editedData.medicalHistory[0].description, 'Medical Records', 'medicalHistory.0.description')}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* Date</label>
+                {renderEditableField('medicalDate', editedData.medicalHistory[0].date, 'Medical Records', 'medicalHistory.0.date')}
+              </div>
+            </div>
+
+            {/* Social History */}
+            <div className="space-y-4">
+              <h2 className="text-base font-medium text-gray-900">Social History</h2>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">* Description</label>
+                {renderEditableField('socialHistory', editedData.socialHistory, 'Social History Form', 'socialHistory')}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Smoking Status</label>
+                {renderEditableField('smokingStatus', '', 'Social History Form', 'smokingStatus', true)}
+              </div>
+            </div>
+
+            {/* Family History */}
+            <div className="space-y-4">
+              <h2 className="text-base font-medium text-gray-900">Family History</h2>
+
+              {editedData.familyHistory.map((item: any, index: number) => (
+                <div key={index} className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">* Relation</label>
+                    {renderEditableField(`familyRelation${index}`, item.relation, 'Family History Form', `familyHistory.${index}.relation`)}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">* Condition</label>
+                    {renderEditableField(`familyCondition${index}`, item.condition, 'Family History Form', `familyHistory.${index}.condition`)}
+                  </div>
+                </div>
+              ))}
+
+              {/* Empty State Example */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Relation</label>
+                  {renderEditableField('emptyRelation', '', 'Family History Form', 'emptyRelation', true)}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Condition</label>
+                  {renderEditableField('emptyCondition', '', 'Family History Form', 'emptyCondition', true)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Source Document Panel */}
+          <div className="w-1/2 border-l border-gray-200 bg-white flex flex-col">
+            {showSource ? (
+              <div className="flex-1 flex flex-col">
+                {/* Source Header */}
+                <div className="p-4 border-b border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">{currentField} - Source Document</h3>
+                      <p className="text-xs text-gray-500 mt-1">{currentFieldIsEmpty ? 'No source available' : 'Patient Registration Form'}</p>
+                    </div>
+                    <button
+                      onClick={() => setShowSource(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Content */}
+                <div className="flex-1 p-4 overflow-auto bg-gray-100">
+                  {currentFieldIsEmpty ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-gray-500">
+                        <svg className="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-sm font-medium text-gray-500 mb-1">No source document available</p>
+                        <p className="text-xs text-gray-400">This field has no associated source data</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded shadow-sm">
+                      <img
+                        src="/med-source.png"
+                        alt="Source Document"
+                        className="w-full h-auto"
+                        style={{ maxHeight: 'none' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <div className="text-center text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <p className="text-sm font-medium text-gray-500">Select a field to view its source</p>
+                  <p className="text-xs text-gray-400 mt-1">{isVerified ? 'This patient record has been verified' : 'Click on any field to see the source document'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Fixed Bottom Buttons */}
+        <div className="border-t border-gray-200 bg-white px-6 py-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onBack}
+                className="text-gray-600 hover:text-gray-800 px-4 py-2 text-sm font-medium"
+              >
+                Close
+              </button>
+              {!isVerified && (
+                <button
+                  onClick={handleSaveAndVerifyAll}
+                  className="bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-teal-800"
+                >
+                  Save
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // OverviewPage has been moved to OverviewPage.tsx
+
   const FilesPage = () => {
     const [files, setFiles] = React.useState([
       {
@@ -2420,7 +2902,9 @@ const MedicalRecordsTable = () => {
                 } cursor-pointer`}
                 onClick={() => {
                   setActiveNavItem(item.id);
-                  if (item.id === 'damages') {
+                  if (item.id === 'overview') {
+                    setCurrentPage('overview');
+                  } else if (item.id === 'damages') {
                     setCurrentPage('damages');
                   } else if (item.id === 'medicals') {
                     setCurrentPage('injuries');
@@ -2438,7 +2922,9 @@ const MedicalRecordsTable = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto">
-          {currentPage === 'files' ? (
+          {currentPage === 'overview' ? (
+            <OverviewPage />
+          ) : currentPage === 'files' ? (
             <FilesPage />
           ) : currentPage === 'damages' ? (
             damageDetailView === 'detail' && selectedDamageRecord ? (
