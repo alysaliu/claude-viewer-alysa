@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run typecheck:*)",
       "Bash(npm run check-types:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:deploy:*)"
     ],
     "deny": [],
     "ask": []

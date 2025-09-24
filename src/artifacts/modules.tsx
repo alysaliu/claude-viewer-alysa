@@ -147,6 +147,7 @@ const MedicalRecordsTable = () => {
   const [editValue, setEditValue] = useState<string>('');
   const [currentView, setCurrentView] = useState<string>('table');
   const [currentPage, setCurrentPage] = useState<string>('injuries');
+  const [savedFields, setSavedFields] = useState<Set<string>>(new Set());
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [activeFilters, setActiveFilters] = useState<Record<string, string | boolean>>({});
@@ -220,6 +221,7 @@ const MedicalRecordsTable = () => {
         );
         return newRecords;
       });
+      setSavedFields(prev => new Set(prev).add(`${editingCell.recordId}-${editingCell.field}`));
     }
     setEditingCell({ recordId: null, field: null });
     setEditValue('');
@@ -727,15 +729,15 @@ const MedicalRecordsTable = () => {
       }
     }
 
+    const isSaved = savedFields.has(`${record.id}-${field}`);
+
     return (
-      <td 
-        className={`${className} hover:bg-gray-50 cursor-pointer ${
-          isModified ? 'ring-2 ring-orange-400 ring-inset' : ''
-        }`}
+      <td
+        className={`${className} hover:bg-gray-50 cursor-pointer`}
         onClick={() => startEditing(record.id, field, value)}
       >
-        <span>
-          {field === 'narrative' || field === 'treatment' || field === 'treatmentStatus' 
+        <span className={`${isSaved ? 'text-gray-900' : isModified ? 'text-blue-600' : 'text-gray-900'} ${isModified ? 'font-semibold' : ''}`}>
+          {field === 'narrative' || field === 'treatment' || field === 'treatmentStatus'
             ? `${value.substring(0, 120)}${value.length > 120 ? '...' : ''}`
             : value
           }
@@ -772,14 +774,14 @@ const MedicalRecordsTable = () => {
     }
 
     return (
-      <td className={`p-2 ${isModified ? 'ring-2 ring-orange-400 ring-inset' : ''}`}>
+      <td className="p-2">
         <button
           onClick={() => handleStatusClick(record)}
           className={`px-2 py-1 rounded text-xs font-medium transition-colors hover:opacity-80 ${
             record.status === 'Needs Review'
               ? 'bg-orange-100 text-orange-800'
               : 'bg-green-100 text-green-800'
-          }`}
+          } ${isModified ? 'font-bold' : ''}`}
         >
           {record.status}
         </button>
@@ -867,15 +869,22 @@ const MedicalRecordsTable = () => {
   };
 
   const InjuryDetailView = ({ record, onBack, onSave }: { record: MedicalRecord, onBack: () => void, onSave: (record: MedicalRecord) => void }) => {
+    const isVerified = record.status === 'Verified';
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
     const [editedRecord, setEditedRecord] = useState<MedicalRecord>(record);
     const [showSource, setShowSource] = useState<boolean>(false);
     const [currentSource, setCurrentSource] = useState<string>('Office Visit 2025-02-25 pg. 1');
+    const [savedFields, setSavedFields] = useState<Set<string>>(new Set());
 
-    const handleSave = () => {
+
+    const handleSaveAndVerifyAll = () => {
+      // Update current record to verified
       const updatedRecord = { ...editedRecord, status: 'Verified' };
       onSave(updatedRecord);
+
+      // TODO: In a real app, this would trigger verification of all records
+      // For now, we'll just save the current record
     };
 
     const startEditing = (field: string, value: string, source: string) => {
@@ -891,6 +900,7 @@ const MedicalRecordsTable = () => {
           ...prev,
           [editingField as keyof MedicalRecord]: editValue
         }));
+        setSavedFields(prev => new Set(prev).add(editingField));
       }
       cancelEdit();
     };
@@ -947,7 +957,7 @@ const MedicalRecordsTable = () => {
           className="cursor-pointer hover:bg-blue-50 p-1 rounded transition-colors"
           onClick={() => startEditing(field, value, source)}
         >
-          <div className="text-blue-600 text-sm">{editedRecord[field]}</div>
+          <div className={`text-sm ${isVerified || savedFields.has(field) ? 'text-gray-900' : 'text-blue-600'}`}>{editedRecord[field]}</div>
           <div className="text-xs text-gray-500 mt-1">{source}</div>
         </div>
       );
@@ -973,7 +983,9 @@ const MedicalRecordsTable = () => {
               <h1 className="text-lg font-semibold text-gray-900">Injury</h1>
             </div>
           </div>
-          <p className="text-sm text-gray-600 mt-1">The data presented in blue below was extracted by AI and needs additional review.</p>
+          {!isVerified && (
+            <p className="text-sm text-gray-600 mt-1">The data presented in blue below was extracted by AI and needs additional review.</p>
+          )}
         </div>
 
         <div className="flex flex-1 overflow-hidden min-h-0">
@@ -1064,18 +1076,14 @@ const MedicalRecordsTable = () => {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{currentSource}</p>
               </div>
-              <div className="p-4 space-y-3 overflow-y-auto" style={{height: 'calc(100% - 4rem)'}}>
-                <div className="bg-gray-100 rounded-lg p-4">
-                  <div className="text-xs text-gray-600 mb-2">Document Preview</div>
-                  <div className="text-sm text-gray-800 leading-relaxed">
-                    Following the motor vehicle accident on September 21, 2022, Mr. Eli Strauss experienced immediate onset of sharp pain in the right ankle. Mr. Strauss reported being the driver of a 2019 Honda Civic that was struck from behind while stopped at a red light on Main Street.
-                  </div>
-                  <div className="mt-3 text-sm font-medium text-gray-900 bg-yellow-100 px-2 py-1 rounded">
-                    Highlighted: "{editingField === 'injury' ? editedRecord.injury : editingField === 'narrative' ? editedRecord.narrative : editValue}"
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500">
-                  This content was extracted from {currentSource}
+              <div className="flex-1 p-4 overflow-auto bg-gray-100">
+                <div className="bg-white rounded shadow-sm">
+                  <img
+                    src="/med-source.png"
+                    alt="Medical Source Document"
+                    className="w-full h-auto"
+                    style={{ maxHeight: 'none' }}
+                  />
                 </div>
               </div>
             </div>
@@ -1097,19 +1105,24 @@ const MedicalRecordsTable = () => {
 
         {/* Fixed Bottom Buttons */}
         <div className="border-t border-gray-200 bg-white px-6 py-4 flex-shrink-0">
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500">
+              Last updated by Supio AI on 9/23/25
+            </div>
+            <div className="flex items-center gap-3">
             <button
               onClick={onBack}
-              className="text-gray-600 hover:text-gray-800 px-4 py-2 border border-gray-300 rounded text-sm font-medium"
+              className="text-gray-600 hover:text-gray-800 px-4 py-2 text-sm font-medium"
             >
               Close
             </button>
             <button
-              onClick={handleSave}
+              onClick={handleSaveAndVerifyAll}
               className="bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-teal-800"
             >
-              Save
+              Save and verify all
             </button>
+            </div>
           </div>
         </div>
 
@@ -1664,10 +1677,88 @@ const MedicalRecordsTable = () => {
 
   const DamageDetailView = ({ record, onBack, onSave }: { record: DamageRecord, onBack: () => void, onSave: (record: DamageRecord) => void }) => {
     const isVerified = record.status === 'Verified';
+    const [showSource, setShowSource] = useState<boolean>(false);
+    const [currentField, setCurrentField] = useState<string>('');
+    const [editingField, setEditingField] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState<string>('');
+    const [editedRecord, setEditedRecord] = useState<DamageRecord>(record);
+    const [savedFields, setSavedFields] = useState<Set<string>>(new Set());
 
-    const handleSave = () => {
-      const updatedRecord = { ...record, status: 'Verified' };
+
+    const handleSaveAndVerifyAll = () => {
+      // Update current record to verified
+      const updatedRecord = { ...editedRecord, status: 'Verified' };
       onSave(updatedRecord);
+
+      // TODO: In a real app, this would trigger verification of all records
+      // For now, we'll just save the current record
+    };
+
+    const startEditing = (field: string, value: string, source: string) => {
+      setEditingField(field);
+      setEditValue(value);
+      setCurrentField(source);
+      setShowSource(true);
+    };
+
+    const confirmEdit = () => {
+      if (editingField) {
+        setEditedRecord(prev => ({
+          ...prev,
+          [editingField as keyof DamageRecord]: editValue
+        }));
+        setSavedFields(prev => new Set(prev).add(editingField));
+      }
+      cancelEdit();
+    };
+
+    const cancelEdit = () => {
+      setEditingField(null);
+      setEditValue('');
+      setShowSource(false);
+    };
+
+
+    const renderEditableField = (field: keyof DamageRecord, value: string, source: string) => {
+      const isEditing = editingField === field;
+
+      if (isEditing) {
+        return (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:ring-blue-500 focus:border-blue-500"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={confirmEdit}
+                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div
+          className="cursor-pointer hover:bg-blue-50 p-1 rounded transition-colors"
+          onClick={() => startEditing(field, value, source)}
+        >
+          <div className={`text-sm ${isVerified || savedFields.has(field) ? 'text-gray-900' : 'text-blue-600'}`}>{editedRecord[field]}</div>
+          <div className="text-xs text-gray-500 mt-1">{source}</div>
+        </div>
+      );
     };
 
     return (
@@ -1692,71 +1783,359 @@ const MedicalRecordsTable = () => {
           <div className="w-1/2 p-6 space-y-6 overflow-y-auto">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">* Facility</label>
-              <div className={`text-sm ${isVerified ? 'text-gray-900' : 'text-blue-600'}`}>{record.facility}</div>
-              <div className="text-xs text-gray-500 mt-1">Bill Document pg. 1</div>
+              {renderEditableField('facility', editedRecord.facility, 'Bill Document pg. 1')}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">* Date</label>
-              <div className={`text-sm ${isVerified ? 'text-gray-900' : 'text-blue-600'}`}>{record.date || 'Not specified'}</div>
-              <div className="text-xs text-gray-500 mt-1">Bill Document pg. 1</div>
+              {renderEditableField('date', editedRecord.date || 'Not specified', 'Bill Document pg. 1')}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">* Description</label>
-              <div className="text-sm text-gray-900 leading-relaxed">{record.description || 'Not specified'}</div>
-              <div className="text-xs text-gray-500 mt-1">Bill Document pg. 1</div>
+              {renderEditableField('description', editedRecord.description || 'Not specified', 'Bill Document pg. 1')}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">* Amount</label>
-              <div className={`text-sm ${isVerified ? 'text-gray-900' : 'text-blue-600'}`}>${record.amount.toLocaleString()}</div>
-              <div className="text-xs text-gray-500 mt-1">Bill Document pg. 1</div>
+              {renderEditableField('amount', `$${editedRecord.amount.toLocaleString()}`, 'Bill Document pg. 1')}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">* Source</label>
-              <div className={`text-sm ${isVerified ? 'text-gray-900' : 'text-blue-600'}`}>{record.source || 'Not specified'}</div>
-              <div className="text-xs text-gray-500 mt-1">Bill Document pg. 1</div>
+              {renderEditableField('source', editedRecord.source || 'Not specified', 'Bill Document pg. 1')}
             </div>
           </div>
 
-          {/* Empty state when not editing */}
-          <div className="w-1/2 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-sm font-medium text-gray-500">Select a field to view its source</p>
-              <p className="text-xs text-gray-400 mt-1">{isVerified ? 'This record has been verified' : 'Click on any blue field to see the source document'}</p>
-            </div>
+          {/* Source Document Panel */}
+          <div className="w-1/2 border-l border-gray-200 bg-white flex flex-col">
+            {showSource ? (
+              <div className="flex-1 flex flex-col">
+                {/* Source Header */}
+                <div className="p-4 border-b border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">{currentField} - Source Document</h3>
+                      <p className="text-xs text-gray-500 mt-1">Bill Document pg. 1</p>
+                    </div>
+                    <button
+                      onClick={() => setShowSource(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Image */}
+                <div className="flex-1 p-4 overflow-auto bg-gray-100">
+                  <div className="bg-white rounded shadow-sm">
+                    <img
+                      src="/image.png"
+                      alt="Source Document"
+                      className="w-full h-auto"
+                      style={{ maxHeight: 'none' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <div className="text-center text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm font-medium text-gray-500">Select a field to view its source</p>
+                  <p className="text-xs text-gray-400 mt-1">{isVerified ? 'This record has been verified' : 'Click on any field to see the source document'}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Fixed Bottom Buttons */}
         <div className="border-t border-gray-200 bg-white px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
-            {!isVerified && (
-              <div className="flex items-center gap-3">
-              </div>
-            )}
-            {isVerified && <div></div>}
+            <div className="text-xs text-gray-500">
+              Last updated by Supio AI on 9/23/25
+            </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={onBack}
-                className="text-gray-600 hover:text-gray-800 px-4 py-2 border border-gray-300 rounded text-sm font-medium"
+                className="text-gray-600 hover:text-gray-800 px-4 py-2 text-sm font-medium"
               >
                 Close
               </button>
               {!isVerified && (
                 <button
-                  onClick={handleSave}
+                  onClick={handleSaveAndVerifyAll}
                   className="bg-teal-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-teal-800"
                 >
-                  Save
+                  Save and verify all
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const FilesPage = () => {
+    const [files, setFiles] = React.useState([
+      {
+        id: 3,
+        name: 'Riverton Hospital - Records',
+        type: 'Medical Records',
+        uploadedDate: '09/16/2025 13:13',
+        size: '139.69 MB',
+        extractionsToReview: 12,
+        icon: '📄'
+      },
+      {
+        id: 4,
+        name: '2025.02.22 Update from Brian',
+        type: 'Letter',
+        uploadedDate: '09/16/2025 13:13',
+        size: '1.41 MB',
+        extractionsToReview: 0,
+        icon: '📄'
+      },
+      {
+        id: 5,
+        name: 'Brian Holyoke EMG results',
+        type: 'Medical Test',
+        uploadedDate: '09/16/2025 13:13',
+        size: '881.94 KB',
+        extractionsToReview: 3,
+        icon: '📄'
+      },
+      {
+        id: 6,
+        name: 'accident_report_202530700_Aug-3-8-12-AM',
+        type: 'Accident Report',
+        uploadedDate: '09/16/2025 13:13',
+        size: '67.28 KB',
+        extractionsToReview: 0,
+        icon: '📄'
+      },
+      {
+        id: 7,
+        name: '2025.01.02 Letter to Social Security',
+        type: 'Letter',
+        uploadedDate: '09/16/2025 13:13',
+        size: '526.82 KB',
+        extractionsToReview: 2,
+        icon: '📄'
+      },
+      {
+        id: 8,
+        name: 'Accident time line 2',
+        type: 'Accident Report',
+        uploadedDate: '09/16/2025 13:13',
+        size: '477.70 KB',
+        extractionsToReview: 0,
+        icon: '📄'
+      },
+      {
+        id: 9,
+        name: 'Intmtn Spine Institute - Bills',
+        type: 'Medical Bill',
+        uploadedDate: '09/16/2025 13:13',
+        size: '38.54 KB',
+        extractionsToReview: 8,
+        icon: '📄'
+      },
+      {
+        id: 10,
+        name: 'Unified Fire Authority - Records',
+        type: 'Medical Records',
+        uploadedDate: '09/16/2025 13:13',
+        size: '144.56 KB',
+        extractionsToReview: 0,
+        icon: '📄'
+      }
+    ]);
+
+    const [editingType, setEditingType] = React.useState<number | null>(null);
+    const [newType, setNewType] = React.useState('');
+
+    const handleTypeEdit = (fileId: number, currentType: string) => {
+      setEditingType(fileId);
+      setNewType(currentType);
+    };
+
+    const handleTypeSave = (fileId: number) => {
+      const currentFile = files.find(f => f.id === fileId);
+      if (currentFile && newType !== currentFile.type && newType.trim()) {
+        const shouldRegenerate = window.confirm(
+          `Document classification changed from "${currentFile.type}" to "${newType}". Would you like Supio to regenerate the extractions based on this new classification?`
+        );
+
+        setFiles(files.map(file =>
+          file.id === fileId
+            ? { ...file, type: newType.trim() }
+            : file
+        ));
+
+        if (shouldRegenerate) {
+          console.log(`Regenerating extractions for file ${fileId} with new type: ${newType}`);
+          // Here you would call the API to regenerate extractions
+        }
+      }
+      setEditingType(null);
+      setNewType('');
+    };
+
+    const handleTypeCancel = () => {
+      setEditingType(null);
+      setNewType('');
+    };
+
+    const documentTypes = [
+      'Medical Records',
+      'Medical Bill',
+      'Medical Test',
+      'Accident Report',
+      'Letter',
+      'Insurance Document',
+      'Legal Document',
+      'Other'
+    ];
+
+    return (
+      <div className="w-full bg-white">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">All Files</h2>
+              <div className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-sm font-medium">
+                {files.length}
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <select className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option>Uploaded</option>
+                <option>Generated</option>
+                <option>All</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs bg-white">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="text-left p-2 font-medium text-gray-700 w-56">Name</th>
+                <th className="text-left p-2 font-medium text-gray-700 w-24">Type</th>
+                <th className="text-left p-2 font-medium text-gray-700 w-32">Uploaded</th>
+                <th className="text-left p-2 font-medium text-gray-700 w-24">Size</th>
+                <th className="text-left p-2 font-medium text-gray-700 w-32">Status</th>
+                <th className="text-left p-2 font-medium text-gray-700 w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((file) => (
+                <tr key={file.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="p-2">
+                    <div className="flex items-center">
+                      <span className="mr-2 text-sm">{file.icon}</span>
+                      <div>
+                        <div className="font-medium text-gray-900">{file.name}</div>
+                        {file.type === 'Generated' && (
+                          <div className="flex items-center mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                              Generated
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-2 text-gray-900">
+                    {editingType === file.id ? (
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={newType}
+                          onChange={(e) => setNewType(e.target.value)}
+                          onBlur={() => handleTypeSave(file.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleTypeSave(file.id);
+                            if (e.key === 'Escape') handleTypeCancel();
+                          }}
+                          className="text-xs border border-gray-300 rounded px-1 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                          autoFocus
+                        >
+                          {documentTypes.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleTypeEdit(file.id, file.type)}
+                        className="text-left hover:bg-gray-100 px-1 py-0.5 rounded transition-colors w-full"
+                      >
+                        {file.type}
+                      </button>
+                    )}
+                  </td>
+                  <td className="p-2 text-gray-500">{file.uploadedDate}</td>
+                  <td className="p-2 text-gray-500">{file.size}</td>
+                  <td className="p-2">
+                    {file.extractionsToReview > 0 ? (
+                      <button
+                        className="px-2 py-1 rounded text-xs font-medium transition-colors hover:opacity-80 bg-orange-100 text-orange-800"
+                        onClick={() => {
+                          // Handle click to navigate to extractions
+                          console.log(`Navigate to ${file.extractionsToReview} extractions for ${file.name}`);
+                        }}
+                      >
+                        {file.extractionsToReview} extractions to review
+                      </button>
+                    ) : (
+                      <button
+                        className="px-2 py-1 rounded text-xs font-medium transition-colors hover:opacity-80 bg-green-100 text-green-800"
+                        onClick={() => {
+                          // Handle click for completed files
+                          console.log(`File ${file.name} is complete`);
+                        }}
+                      >
+                        Complete
+                      </button>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    <button className="text-gray-400 hover:text-gray-600">
+                      <span className="sr-only">More options</span>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="px-4 py-3 bg-white border-t border-gray-200 flex items-center justify-between">
+          <div></div>
+          <div className="flex items-center gap-2">
+            <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded">1</button>
+            <button className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700">2</button>
+            <button className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700">3</button>
+            <button className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700">4</button>
+            <button className="px-3 py-1 text-sm text-gray-500 hover:text-gray-700">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <span className="text-sm text-gray-500 ml-2">25 / page</span>
           </div>
         </div>
       </div>
@@ -2045,6 +2424,8 @@ const MedicalRecordsTable = () => {
                     setCurrentPage('damages');
                   } else if (item.id === 'medicals') {
                     setCurrentPage('injuries');
+                  } else if (item.id === 'files') {
+                    setCurrentPage('files');
                   }
                 }}
               >
@@ -2057,7 +2438,9 @@ const MedicalRecordsTable = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto">
-          {currentPage === 'damages' ? (
+          {currentPage === 'files' ? (
+            <FilesPage />
+          ) : currentPage === 'damages' ? (
             damageDetailView === 'detail' && selectedDamageRecord ? (
               <DamageDetailView
                 record={selectedDamageRecord}
