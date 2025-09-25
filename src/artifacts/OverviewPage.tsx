@@ -1,19 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Home, BarChart2, Layers, PenTool, ChevronDown, MoreVertical, Bell, Briefcase, Activity, DollarSignIcon } from 'lucide-react';
 
-interface MedicalRecord {
-  id: number;
-  date: string;
-  injury: string;
-  status: string;
-  icdCode: string;
-  narrative: string;
-  anatomicalLocation: string;
-  treatment: string;
-  treatmentStatus: string;
-  critical: string;
-  diagnosis: string;
-}
 
 // Detailed Patient Detail View Component that matches the design
 const PatientDetailView = ({ patientData, onBack, onSave }: {
@@ -22,10 +9,78 @@ const PatientDetailView = ({ patientData, onBack, onSave }: {
   onSave: (data: any) => void;
 }) => {
   const [editedData, setEditedData] = React.useState(patientData);
-  const [showSource, setShowSource] = React.useState(true);
+  const [originalData, setOriginalData] = React.useState(patientData);
+  const [showSource, setShowSource] = React.useState(false);
+  const [currentField, setCurrentField] = React.useState('');
+  const [modifiedFields, setModifiedFields] = React.useState<Set<string>>(new Set());
+  const [dateOfBirthConflict, setDateOfBirthConflict] = React.useState(true);
+  const [alternativeDateOfBirth, setAlternativeDateOfBirth] = React.useState("10/05/66");
 
   const handleFieldChange = (field: string, value: string) => {
-    setEditedData({ ...editedData, [field]: value });
+    const newData = { ...editedData, [field]: value };
+    setEditedData(newData);
+
+    // Track which fields have been modified
+    const newModifiedFields = new Set(modifiedFields);
+    if (getFieldValue(originalData, field) !== value) {
+      newModifiedFields.add(field);
+    } else {
+      newModifiedFields.delete(field);
+    }
+    setModifiedFields(newModifiedFields);
+  };
+
+  const getFieldValue = (data: any, fieldPath: string): any => {
+    if (fieldPath.includes('.')) {
+      const parts = fieldPath.split('.');
+      let value = data;
+      for (const part of parts) {
+        if (part.includes('[') && part.includes(']')) {
+          const [arrayName, indexStr] = part.split('[');
+          const index = parseInt(indexStr.replace(']', ''));
+          value = value[arrayName]?.[index];
+        } else {
+          value = value[part];
+        }
+      }
+      return value;
+    }
+    return data[fieldPath];
+  };
+
+  const handleCancelChanges = () => {
+    setEditedData(originalData);
+    setModifiedFields(new Set());
+  };
+
+  const handleSave = () => {
+    // Save the changes by calling the parent's onSave function
+    onSave(editedData);
+
+    // Update the original data to match the saved data
+    setOriginalData(editedData);
+
+    // Clear the modified fields since everything is now saved
+    setModifiedFields(new Set());
+  };
+
+  const resolveDateOfBirthConflict = (selectedValue: string) => {
+    // Update the main dateOfBirth field with the selected value
+    const newData = { ...editedData, dateOfBirth: selectedValue };
+    setEditedData(newData);
+
+    // Mark the field as modified
+    const newModifiedFields = new Set(modifiedFields);
+    newModifiedFields.add('dateOfBirth');
+    setModifiedFields(newModifiedFields);
+
+    // Remove the conflict state
+    setDateOfBirthConflict(false);
+  };
+
+  const handleFieldClick = (fieldName: string) => {
+    setCurrentField(fieldName);
+    setShowSource(true);
   };
 
   return (
@@ -40,11 +95,24 @@ const PatientDetailView = ({ patientData, onBack, onSave }: {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {modifiedFields.size > 0 && (
+              <button
+                onClick={handleCancelChanges}
+                className="px-3 py-2 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50"
+              >
+                Cancel All Changes
+              </button>
+            )}
             <button
-              onClick={() => onSave(editedData)}
-              className="px-4 py-2 bg-teal-700 text-white text-sm rounded hover:bg-teal-800"
+              onClick={handleSave}
+              className={`px-4 py-2 text-white text-sm rounded ${
+                modifiedFields.size > 0
+                  ? 'bg-teal-700 hover:bg-teal-800'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+              disabled={modifiedFields.size === 0}
             >
-              Save
+              {modifiedFields.size > 0 ? `Save Changes (${modifiedFields.size})` : 'Save'}
             </button>
             <button
               onClick={onBack}
@@ -61,97 +129,420 @@ const PatientDetailView = ({ patientData, onBack, onSave }: {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Form */}
-        <div className="w-1/2 overflow-auto p-6 space-y-6">
+        <div className="w-1/2 overflow-auto p-4 space-y-4">
           {/* Basic Patient Information */}
-          <div className="space-y-4">
-            <h2 className="text-base font-medium text-gray-900">Basic Information</h2>
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-gray-900 mb-3">Basic Information</h2>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">* Name</label>
-              <input
-                type="text"
-                value={editedData.name}
-                onChange={(e) => handleFieldChange('name', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">* Name</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editedData.name}
+                  onChange={(e) => handleFieldChange('name', e.target.value)}
+                  onClick={() => handleFieldClick('Name')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Alysa Liu on 9/20/25
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">* Gender</label>
-              <input
-                type="text"
-                value={editedData.gender}
-                onChange={(e) => handleFieldChange('gender', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">* Gender</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editedData.gender}
+                  onChange={(e) => handleFieldChange('gender', e.target.value)}
+                  onClick={() => handleFieldClick('Gender')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Supio AI on 8/15/23
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
+              <label className="block text-xs font-medium text-gray-700 mb-0.5 flex items-center gap-1">
                 * Date of Birth
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                  Conflict
+                {dateOfBirthConflict && (
+                  <span className="text-xs font-medium text-orange-600">
+                    Has Conflict
+                  </span>
+                )}
+              </label>
+{dateOfBirthConflict ? (
+                <div className="space-y-1">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={editedData.dateOfBirth}
+                      onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                      onClick={() => handleFieldClick('Date of Birth')}
+                      className="w-full px-2 py-1.5 pr-14 border border-gray-300 bg-orange-50 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-orange-100 cursor-pointer"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        onClick={() => resolveDateOfBirthConflict(editedData.dateOfBirth)}
+                        className="p-0.5 text-gray-400 hover:text-green-500 cursor-pointer"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <div className="group/tooltip">
+                        <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                        <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                          Updated by Supio AI on 9/25/25
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={alternativeDateOfBirth}
+                      onChange={(e) => setAlternativeDateOfBirth(e.target.value)}
+                      onClick={() => handleFieldClick('Alternative Date of Birth')}
+                      className="w-full px-2 py-1.5 pr-14 border border-gray-300 bg-orange-50 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-orange-100 cursor-pointer"
+                      placeholder="Alternative value"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        onClick={() => resolveDateOfBirthConflict(alternativeDateOfBirth)}
+                        className="p-0.5 text-gray-400 hover:text-green-500 cursor-pointer"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <div className="group/tooltip">
+                        <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                        </svg>
+                        <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                          Alternative from Document B
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editedData.dateOfBirth}
+                    onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                    onClick={() => handleFieldClick('Date of Birth')}
+                    className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                    <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Updated by Supio AI on 9/25/25
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5 flex items-center gap-1">
+                * State of Residence
+                <span className="text-xs font-medium text-red-600">
+                  Missing
                 </span>
               </label>
-              <input
-                type="text"
-                value={editedData.dateOfBirth}
-                onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <div className="mt-1 text-xs text-orange-600">Alternative value: 10/05/66</div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">* State of Residence</label>
-              <input
-                type="text"
-                value={editedData.stateOfResidence}
-                onChange={(e) => handleFieldChange('stateOfResidence', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Missing required data"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editedData.stateOfResidence}
+                  onChange={(e) => handleFieldChange('stateOfResidence', e.target.value)}
+                  onClick={() => handleFieldClick('State of Residence')}
+                  className="w-full px-2 py-1.5 pr-7 border border-red-300 bg-red-50 rounded text-xs focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 hover:bg-red-100 cursor-pointer"
+                  placeholder="Enter field"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Alysa Liu on 9/22/25
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Medical History */}
-          <div className="space-y-4">
-            <h2 className="text-base font-medium text-gray-900">Medical History</h2>
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-gray-900 mb-3">Medical history</h2>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">* Description</label>
-              <textarea
-                value={editedData.medicalHistory?.[0]?.description || ''}
-                onChange={(e) => {
-                  const newHistory = [...(editedData.medicalHistory || [])];
-                  if (newHistory[0]) {
-                    newHistory[0].description = e.target.value;
-                  } else {
-                    newHistory[0] = { description: e.target.value, date: '' };
-                  }
-                  setEditedData({ ...editedData, medicalHistory: newHistory });
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                rows={3}
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">* Description</label>
+              <div className="relative">
+                <textarea
+                  value={editedData.medicalHistory?.[0]?.description || ''}
+                  onChange={(e) => {
+                    const newHistory = [...(editedData.medicalHistory || [])];
+                    if (newHistory[0]) {
+                      newHistory[0].description = e.target.value;
+                    } else {
+                      newHistory[0] = { description: e.target.value, date: '' };
+                    }
+                    const newData = { ...editedData, medicalHistory: newHistory };
+                    setEditedData(newData);
+
+                    // Track changes
+                    const newModifiedFields = new Set(modifiedFields);
+                    const originalValue = originalData.medicalHistory?.[0]?.description || '';
+                    if (originalValue !== e.target.value) {
+                      newModifiedFields.add('medicalHistory[0].description');
+                    } else {
+                      newModifiedFields.delete('medicalHistory[0].description');
+                    }
+                    setModifiedFields(newModifiedFields);
+                  }}
+                  onClick={() => handleFieldClick('Medical Description')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer resize-none"
+                  rows={2}
+                  placeholder="Typing!"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Supio AI on 8/15/23
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">* Date</label>
-              <input
-                type="text"
-                value={editedData.medicalHistory?.[0]?.date || ''}
-                onChange={(e) => {
-                  const newHistory = [...(editedData.medicalHistory || [])];
-                  if (newHistory[0]) {
-                    newHistory[0].date = e.target.value;
-                  } else {
-                    newHistory[0] = { description: '', date: e.target.value };
-                  }
-                  setEditedData({ ...editedData, medicalHistory: newHistory });
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">* Date</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={editedData.medicalHistory?.[0]?.date || ''}
+                  onChange={(e) => {
+                    const newHistory = [...(editedData.medicalHistory || [])];
+                    if (newHistory[0]) {
+                      newHistory[0].date = e.target.value;
+                    } else {
+                      newHistory[0] = { description: '', date: e.target.value };
+                    }
+                    const newData = { ...editedData, medicalHistory: newHistory };
+                    setEditedData(newData);
+
+                    // Track changes
+                    const newModifiedFields = new Set(modifiedFields);
+                    const originalValue = originalData.medicalHistory?.[0]?.date || '';
+                    if (originalValue !== e.target.value) {
+                      newModifiedFields.add('medicalHistory[0].date');
+                    } else {
+                      newModifiedFields.delete('medicalHistory[0].date');
+                    }
+                    setModifiedFields(newModifiedFields);
+                  }}
+                  onClick={() => handleFieldClick('Medical Date')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Alysa Liu on 9/20/25
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Social History */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-gray-900 mb-3">Social history</h2>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">* Description</label>
+              <div className="relative">
+                <textarea
+                  value={editedData.socialHistory || ''}
+                  onChange={(e) => handleFieldChange('socialHistory', e.target.value)}
+                  onClick={() => handleFieldClick('Social History')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer resize-none"
+                  rows={2}
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Supio AI on 8/20/23
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-0.5">Smoking Status</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  onClick={() => handleFieldClick('Smoking Status')}
+                  className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                  placeholder="Enter field"
+                />
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                  <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                    Updated by Alysa Liu on 9/18/25
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Family History */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-gray-900 mb-3">Family history</h2>
+
+            {editedData.familyHistory?.map((item: any, index: number) => (
+              <div key={index} className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-0.5">* Relation</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={item.relation}
+                      onChange={(e) => {
+                        const newHistory = [...(editedData.familyHistory || [])];
+                        newHistory[index] = { ...item, relation: e.target.value };
+                        const newData = { ...editedData, familyHistory: newHistory };
+                        setEditedData(newData);
+
+                        // Track changes
+                        const newModifiedFields = new Set(modifiedFields);
+                        const originalValue = originalData.familyHistory?.[index]?.relation || '';
+                        if (originalValue !== e.target.value) {
+                          newModifiedFields.add(`familyHistory[${index}].relation`);
+                        } else {
+                          newModifiedFields.delete(`familyHistory[${index}].relation`);
+                        }
+                        setModifiedFields(newModifiedFields);
+                      }}
+                      onClick={() => handleFieldClick('Family Relation')}
+                      className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                      <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      </svg>
+                      <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                        Updated by Supio AI on 8/25/23
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-0.5">* Condition</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={item.condition}
+                      onChange={(e) => {
+                        const newHistory = [...(editedData.familyHistory || [])];
+                        newHistory[index] = { ...item, condition: e.target.value };
+                        const newData = { ...editedData, familyHistory: newHistory };
+                        setEditedData(newData);
+
+                        // Track changes
+                        const newModifiedFields = new Set(modifiedFields);
+                        const originalValue = originalData.familyHistory?.[index]?.condition || '';
+                        if (originalValue !== e.target.value) {
+                          newModifiedFields.add(`familyHistory[${index}].condition`);
+                        } else {
+                          newModifiedFields.delete(`familyHistory[${index}].condition`);
+                        }
+                        setModifiedFields(newModifiedFields);
+                      }}
+                      onClick={() => handleFieldClick('Family Condition')}
+                      className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                    />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                      <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                        Updated by Alysa Liu on 9/15/25
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )) || []}
+
+            {/* Empty State Example */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-0.5">Relation</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    onClick={() => handleFieldClick('Family Relation')}
+                    className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                    placeholder="Enter field"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                    <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Updated by Alysa Liu on 9/10/25
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-0.5">Condition</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    onClick={() => handleFieldClick('Family Condition')}
+                    className="w-full px-2 py-1.5 pr-7 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50 cursor-pointer"
+                    placeholder="Enter field"
+                  />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 group/tooltip">
+                    <svg className="w-4 h-4 text-gray-400 hover:text-blue-500 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    <div className="absolute top-full right-0 mt-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                      Updated by Supio AI on 9/12/25
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -161,18 +552,19 @@ const PatientDetailView = ({ patientData, onBack, onSave }: {
           {showSource ? (
             <div className="flex-1 flex flex-col">
               {/* Source Header */}
-              <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <div className="p-3 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900">Source: Physician's Note</h3>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      {currentField ? `${currentField} - Source Document` : 'Source: Physician\'s Note'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Physician's Note</p>
                   </div>
                   <button
                     onClick={() => setShowSource(false)}
                     className="text-gray-400 hover:text-gray-600"
                   >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+
                   </button>
                 </div>
               </div>
@@ -218,14 +610,14 @@ const PatientDetailView = ({ patientData, onBack, onSave }: {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <div className="text-sm">No source selected</div>
-                <button
-                  onClick={() => setShowSource(true)}
-                  className="text-blue-600 text-xs mt-2 hover:text-blue-800"
-                >
-                  Show source document
-                </button>
+              <div className="text-center px-8">
+                <div className="mb-4">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="text-sm font-medium text-gray-900 mb-2">No source document selected</div>
+                <div className="text-xs text-gray-500 mb-4">Click on any field to view the source document where that information was extracted from.</div>
               </div>
             </div>
           )}
@@ -241,6 +633,18 @@ const OverviewPage = () => {
   const [, setIsLoading] = useState(true);
   const [activeNavItem, setActiveNavItem] = useState<string>('overview');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [currentExtractionText, setCurrentExtractionText] = useState(0);
+
+  const extractionTexts = [
+    "Supio AI is extracting information from the police report...",
+    "Supio AI is extracting information from medical records...",
+    "Supio AI is extracting information from witness statements...",
+    "Supio AI is extracting information from insurance documents...",
+    "Supio AI is extracting information from repair estimates...",
+    "Supio AI is extracting information from EMT reports...",
+    "Supio AI is extracting information from traffic citations...",
+    "Supio AI is extracting information from hospital records..."
+  ];
 
   useEffect(() => {
     const stages = [
@@ -263,11 +667,22 @@ const OverviewPage = () => {
     });
   }, []);
 
+  // Cycle through extraction texts while loading
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (loadingStage < 7) { // Only cycle while still loading
+        setCurrentExtractionText((prev) => (prev + 1) % extractionTexts.length);
+      }
+    }, 1000); // Change text every 1 second
+
+    return () => clearInterval(interval);
+  }, [loadingStage, extractionTexts.length]);
+
   const patientData = {
     name: 'Brian Wayne Holyoke',
     gender: 'Male',
     dateOfBirth: '10/05/1966 (age 58 years)',
-    stateOfResidence: 'UT',
+    stateOfResidence: 'No data found',
     medicalHistory: [
       { description: 'Pulmonary emboli\nSuspected disease caused by 2019-nCoV', date: '05/29/2020' }
     ],
@@ -297,6 +712,11 @@ const OverviewPage = () => {
 
   const handleSave = (data: any) => {
     console.log('Saving data:', data);
+
+    // Update the patient data with the saved changes
+    // This will persist the changes in the main component
+    Object.assign(patientData, data);
+
     setEditingSection(null);
   };
 
@@ -310,52 +730,7 @@ const OverviewPage = () => {
     { id: 'files', icon: <Layers size={18} />, label: 'Files' }
   ];
 
-  // If editing insights section, show detail view (keeping existing behavior)
-  if (editingSection === 'insights') {
-    const mockRecord: MedicalRecord = {
-      id: 1,
-      date: patientData.insights.dateOfIncident,
-      injury: 'Case Insights',
-      status: 'Unverified',
-      icdCode: patientData.insights.locationOfIncident,
-      narrative: patientData.insights.descriptionOfIncident,
-      anatomicalLocation: patientData.name,
-      treatment: patientData.gender,
-      treatmentStatus: patientData.dateOfBirth,
-      critical: patientData.stateOfResidence,
-      diagnosis: `Medical: ${patientData.medicalHistory[0].description}; Social: ${patientData.socialHistory}`
-    };
-
-    return (
-      <PatientDetailView
-        record={mockRecord}
-        onBack={handleBackToOverview}
-        onSave={handleSave}
-      />
-    );
-  } else if (editingSection && editingSection !== 'patient') {
-    const mockRecord: MedicalRecord = {
-      id: 1,
-      date: '08/03/2023',
-      injury: editingSection === 'medical' ? 'Medical History' : editingSection === 'social' ? 'Social History' : 'Family History',
-      status: 'Unverified',
-      icdCode: 'N/A',
-      narrative: 'Detailed information for ' + editingSection,
-      anatomicalLocation: 'N/A',
-      treatment: 'N/A',
-      treatmentStatus: 'N/A',
-      critical: 'No',
-      diagnosis: 'N/A'
-    };
-
-    return (
-      <PatientDetailView
-        patientData={mockRecord}
-        onBack={handleBackToOverview}
-        onSave={handleSave}
-      />
-    );
-  }
+  // No other editing sections are currently supported
 
   const LoadingSkeleton = ({ className }: { className?: string }) => (
     <div className={`animate-pulse bg-gray-200 rounded ${className}`}></div>
@@ -371,14 +746,14 @@ const OverviewPage = () => {
             <h1 className="text-lg font-medium text-gray-900">Eli Strauss - MVA</h1>
           </div>
           <div className="flex items-center space-x-3">
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm font-medium bg-white hover:bg-gray-50 flex items-center">
-              Export
-              <ChevronDown className="ml-1 h-4 w-4" />
-            </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm font-medium bg-white hover:bg-gray-50">
-              Print
-            </button>
+          <div className="text-gray-500 text-xs">
+            {loadingStage < 7
+              ? extractionTexts[currentExtractionText]
+              : "Supio AI has finished extracting data from your uploaded documents."
+            }
+          </div>
             <div className="relative">
+              
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className="p-1 border border-gray-300 rounded text-sm font-medium bg-white hover:bg-gray-50"
@@ -595,14 +970,6 @@ const OverviewPage = () => {
             <div className="bg-white rounded border border-gray-200">
               <div className="flex items-center justify-between p-3 border-b border-gray-100">
                 <h3 className="text-sm font-medium text-gray-900">Insights</h3>
-                {loadingStage >= 6 && (
-                  <button
-                    onClick={() => handleEdit('insights')}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    Edit
-                  </button>
-                )}
               </div>
               <div className="p-3 space-y-3 text-xs">
                 <div>
