@@ -15,120 +15,220 @@ interface MedicalRecord {
   diagnosis: string;
 }
 
-// Simple Patient Detail View Component
+// Detailed Patient Detail View Component that matches the design
 const PatientDetailView = ({ patientData, onBack, onSave }: {
   patientData: any;
   onBack: () => void;
   onSave: (data: any) => void;
 }) => {
-  const [editData, setEditData] = useState(patientData);
+  const [editedData, setEditedData] = React.useState(patientData);
+  const [showSource, setShowSource] = React.useState(true);
+
+  const handleFieldChange = (field: string, value: string) => {
+    setEditedData({ ...editedData, [field]: value });
+  };
 
   return (
-    <div className="w-full bg-white">
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={onBack} className="text-blue-600 text-sm flex items-center gap-2">
-            ← Back to Overview
-          </button>
-          <button
-            onClick={() => onSave(editData)}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          >
-            Save Changes
-          </button>
-        </div>
-        <h1 className="text-lg font-semibold mb-4">Edit Patient Information</h1>
-        <div className="space-y-4">
+    <div className="h-full flex flex-col bg-white">
+      {/* Header */}
+      <div className="border-b border-gray-200 bg-white px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              type="text"
-              value={editData.name}
-              onChange={(e) => setEditData({...editData, name: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+            <h1 className="text-lg font-semibold text-gray-900">Patient Information</h1>
+            <div className="flex items-center mt-1">
+              <span className="text-xs text-gray-500">Last updated by Supio AI on 9/25/25 | 0 edits made by Alysa Liu</span>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-            <select
-              value={editData.gender}
-              onChange={(e) => setEditData({...editData, gender: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onSave(editedData)}
+              className="px-4 py-2 bg-teal-700 text-white text-sm rounded hover:bg-teal-800"
             >
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-            <input
-              type="text"
-              value={editData.dateOfBirth}
-              onChange={(e) => setEditData({...editData, dateOfBirth: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">State of Residence</label>
-            <input
-              type="text"
-              value={editData.stateOfResidence}
-              onChange={(e) => setEditData({...editData, stateOfResidence: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+              Save
+            </button>
+            <button
+              onClick={onBack}
+              className="p-2 text-gray-400 hover:text-gray-600"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
 
-// Simple Injury Detail View Component
-const InjuryDetailView = ({ record, onBack, onSave }: {
-  record: MedicalRecord;
-  onBack: () => void;
-  onSave: (data: any) => void;
-}) => {
-  const [editData, setEditData] = useState(record);
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Form */}
+        <div className="w-1/2 overflow-auto p-6 space-y-6">
+          {/* Basic Patient Information */}
+          <div className="space-y-4">
+            <h2 className="text-base font-medium text-gray-900">Basic Information</h2>
 
-  return (
-    <div className="w-full bg-white">
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={onBack} className="text-blue-600 text-sm flex items-center gap-2">
-            ← Back to Overview
-          </button>
-          <button
-            onClick={() => onSave(editData)}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-          >
-            Save Changes
-          </button>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">* Name</label>
+              <input
+                type="text"
+                value={editedData.name}
+                onChange={(e) => handleFieldChange('name', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">* Gender</label>
+              <input
+                type="text"
+                value={editedData.gender}
+                onChange={(e) => handleFieldChange('gender', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-2">
+                * Date of Birth
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                  Conflict
+                </span>
+              </label>
+              <input
+                type="text"
+                value={editedData.dateOfBirth}
+                onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="mt-1 text-xs text-orange-600">Alternative value: 10/05/66</div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">* State of Residence</label>
+              <input
+                type="text"
+                value={editedData.stateOfResidence}
+                onChange={(e) => handleFieldChange('stateOfResidence', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Missing required data"
+              />
+            </div>
+          </div>
+
+          {/* Medical History */}
+          <div className="space-y-4">
+            <h2 className="text-base font-medium text-gray-900">Medical History</h2>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">* Description</label>
+              <textarea
+                value={editedData.medicalHistory?.[0]?.description || ''}
+                onChange={(e) => {
+                  const newHistory = [...(editedData.medicalHistory || [])];
+                  if (newHistory[0]) {
+                    newHistory[0].description = e.target.value;
+                  } else {
+                    newHistory[0] = { description: e.target.value, date: '' };
+                  }
+                  setEditedData({ ...editedData, medicalHistory: newHistory });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">* Date</label>
+              <input
+                type="text"
+                value={editedData.medicalHistory?.[0]?.date || ''}
+                onChange={(e) => {
+                  const newHistory = [...(editedData.medicalHistory || [])];
+                  if (newHistory[0]) {
+                    newHistory[0].date = e.target.value;
+                  } else {
+                    newHistory[0] = { description: '', date: e.target.value };
+                  }
+                  setEditedData({ ...editedData, medicalHistory: newHistory });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
         </div>
-        <h1 className="text-lg font-semibold mb-4">Edit {record.injury}</h1>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Narrative</label>
-            <textarea
-              value={editData.narrative}
-              onChange={(e) => setEditData({...editData, narrative: e.target.value})}
-              rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={editData.status}
-              onChange={(e) => setEditData({...editData, status: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="Verified">Verified</option>
-              <option value="Unverified">Unverified</option>
-              <option value="Under Review">Under Review</option>
-            </select>
-          </div>
+
+        {/* Right Panel - Source Document */}
+        <div className="w-1/2 border-l border-gray-200 bg-white flex flex-col">
+          {showSource ? (
+            <div className="flex-1 flex flex-col">
+              {/* Source Header */}
+              <div className="p-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900">Source: Physician's Note</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowSource(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Source Content */}
+              <div className="flex-1 p-4 overflow-auto">
+                <div className="text-xs leading-relaxed">
+                  <div className="mb-4">
+                    <div className="font-medium">PATIENT NAME: Holyoke, Bryan</div>
+                    <div>DOS: 08/29/2018</div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="font-medium mb-2">HISTORY:</div>
+                    <div>This is a 51-year-old male who comes to us complaining of pain in the left leg also. He injured himself on 08/19/2018 while playing golf. He thinks he may have twisted his left knee. He woke up that night in the lot of pain. He got a brace to use, but he does not feel that the brace is helping him. He is complaining of swelling in his left leg also.</div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="font-medium mb-2">PHYSICAL EXAMINATION:</div>
+                    <div>This is a well-developed, very overweight male in mild distress. It is obvious that he has a very antalgic gait with a short stance phase on the left knee. There is 2+ edema of the left knee. The point of maximum tenderness is over the lateral joint line. There is also edema of the lower extremity below the knee probably from the brace being too tight. He moves his ankle well and has no pain in the lower leg.</div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div>Provocative testing reveals a negative Lachman test. There is a positive McMurray test of the left knee and a positive Apley's test. I do not feel any significant clicking however. Neurologically he is intact.</div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="font-medium mb-2">IMPRESSION:</div>
+                    <div>I am very concerned this gentleman has torn the lateral meniscus of his left knee. He is a right-handed golfer and he puts a torque on his left knee when he swings.</div>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="font-medium mb-2">RECOMMENDATIONS:</div>
+                    <div>I would definitely recommend an MRI of the left knee to investigate this further. He will have the MRI performed and then we will recheck him in the office to see if our fears are confirmed.</div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <div>John D. Sonnenberg M.D.</div>
+                    <div>JS/ZOD/PR</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <div className="text-sm">No source selected</div>
+                <button
+                  onClick={() => setShowSource(true)}
+                  className="text-blue-600 text-xs mt-2 hover:text-blue-800"
+                >
+                  Show source document
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -185,7 +285,10 @@ const OverviewPage = () => {
   };
 
   const handleEdit = (section: string) => {
+    console.log('handleEdit called with:', section);
+    console.log('Current editingSection before:', editingSection);
     setEditingSection(section);
+    console.log('Setting editingSection to:', section);
   };
 
   const handleBackToOverview = () => {
@@ -207,16 +310,8 @@ const OverviewPage = () => {
     { id: 'files', icon: <Layers size={18} />, label: 'Files' }
   ];
 
-  // If editing a section, show the appropriate detail view
-  if (editingSection === 'patient') {
-    return (
-      <PatientDetailView
-        patientData={patientData}
-        onBack={handleBackToOverview}
-        onSave={handleSave}
-      />
-    );
-  } else if (editingSection === 'insights') {
+  // If editing insights section, show detail view (keeping existing behavior)
+  if (editingSection === 'insights') {
     const mockRecord: MedicalRecord = {
       id: 1,
       date: patientData.insights.dateOfIncident,
@@ -232,13 +327,13 @@ const OverviewPage = () => {
     };
 
     return (
-      <InjuryDetailView
+      <PatientDetailView
         record={mockRecord}
         onBack={handleBackToOverview}
         onSave={handleSave}
       />
     );
-  } else if (editingSection) {
+  } else if (editingSection && editingSection !== 'patient') {
     const mockRecord: MedicalRecord = {
       id: 1,
       date: '08/03/2023',
@@ -254,8 +349,8 @@ const OverviewPage = () => {
     };
 
     return (
-      <InjuryDetailView
-        record={mockRecord}
+      <PatientDetailView
+        patientData={mockRecord}
         onBack={handleBackToOverview}
         onSave={handleSave}
       />
@@ -268,6 +363,7 @@ const OverviewPage = () => {
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
+
       {/* Top Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 z-10">
         <div className="w-full px-4 py-3 flex items-center justify-between">
@@ -580,6 +676,24 @@ const OverviewPage = () => {
         </div>
         </main>
       </div>
+
+      {/* Patient Detail Drawer - ALWAYS show for debugging */}
+      {editingSection === 'patient' && (
+        <>
+          <div className="fixed inset-0 z-[60] overflow-hidden" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black bg-opacity-50" onClick={handleBackToOverview}></div>
+            {/* Drawer */}
+            <div className="absolute right-0 top-0 h-full w-2/3 bg-white shadow-xl transform translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
+              <PatientDetailView
+                patientData={patientData}
+                onBack={handleBackToOverview}
+                onSave={handleSave}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
